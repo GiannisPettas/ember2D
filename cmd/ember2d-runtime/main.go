@@ -34,6 +34,39 @@ func main() {
 	// 1. Initialize World
 	world := entity.NewWorld()
 
+	// TEST STEP 1: Create entities with auto-generated IDs
+	log.Println("\n=== Testing Step 1: Entity Creation ===")
+
+	// Create a player
+	player := world.CreateEntity("player")
+	log.Printf("Created: %s", player.ID)
+
+	// Create multiple enemies
+	enemy1 := world.CreateEntity("enemy")
+	enemy2 := world.CreateEntity("enemy")
+	enemy3 := world.CreateEntity("enemy")
+	log.Printf("Created: %s", enemy1.ID)
+	log.Printf("Created: %s", enemy2.ID)
+	log.Printf("Created: %s", enemy3.ID)
+
+	// Create some bullets
+	bullet1 := world.CreateEntity("bullet")
+	bullet2 := world.CreateEntity("bullet")
+	log.Printf("Created: %s", bullet1.ID)
+	log.Printf("Created: %s", bullet2.ID)
+
+	// Verify entities are in the world
+	log.Printf("Total entities in world: %d", len(world.Entities))
+
+	// Test retrieval
+	retrieved := world.GetEntity("player_0")
+	if retrieved != nil {
+		log.Printf("Successfully retrieved entity: %s", retrieved.ID)
+	} else {
+		log.Println("ERROR: Could not retrieve player_0")
+	}
+	log.Println("=== Step 1 Test Complete ===")
+
 	// 2. Define a Test Behavior
 	// Rule: When "START_GAME" event happens -> Log "Engine is running!"
 	testBehavior := &behavior.Behavior{

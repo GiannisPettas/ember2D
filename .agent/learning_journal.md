@@ -266,3 +266,146 @@ dispatcher.Emit(Event{Type: "PLAYER_HIT"})
 Limit yourself to **one** God Object (the Dispatcher). Keep its logic simple (just routing). All game logic lives in **Behaviors**, which are small and testable.
 
 This is why ECS (Entity-Component-System) and Event-Driven architectures dominate game development, even though they violate traditional OOP principles.
+
+---
+
+## 9. Payload: The Event's Cargo
+*Understanding the data flow from `event.go` to `debug_log.go`*
+
+When we ran the engine, we saw this output:
+```
+[ACTION] DebugLog: Engine is running! (Event: START_GAME)
+        Payload: map[param:test_value]
+```
+
+Let's trace where this "Payload" comes from and what it means.
+
+### What Does "Payload" Mean?
+
+**Payload** is a term borrowed from shipping and aerospace:
+- **Rocket**: The payload is the satellite (the useful cargo), not the fuel
+- **Truck**: The payload is the boxes being delivered, not the truck itself
+- **Letter**: The payload is the message inside, not the envelope
+
+**In programming**: Payload = "The actual data being transmitted"
+
+### The Definition: event.go
+
+```go
+// internal/engine/core/event.go
+type Event struct {
+    Type    EventType           // The "label" (what kind of event)
+    A       string              // First entity involved (optional)
+    B       string              // Second entity involved (optional)
+    Payload map[string]any      // The "cargo" (flexible data)
+}
+```
+
+**Key insight**: `Payload` is just a **field name** in the Event struct. Its type is `map[string]any`, which means:
+- **Keys** are strings (e.g., `"damage"`, `"position"`, `"param"`)
+- **Values** can be anything (`any` = any type: int, string, bool, struct, etc.)
+
+This gives maximum flexibility!
+
+### The Complete Data Flow
+
+#### 1. **Creation** (main.go)
+```go
+dispatcher.Emit(core.Event{
+    Type: "START_GAME",
+    Payload: map[string]any{
+        "param": "test_value",  // ← Data originates here
+    },
+})
+```
+
+#### 2. **Storage** (dispatcher.go)
+```go
+func (d *Dispatcher) Emit(ev core.Event) {
+    d.eventQueue = append(d.eventQueue, ev)  // ← Queued for processing
+}
+```
+
+#### 3. **Processing** (dispatcher.go)
+```go
+ctx := core.NewContext(d.World, ev)  // ← Event packed into Context
+```
+
+#### 4. **Delivery** (debug_log.go)
+```go
+func (a *DebugLog) Execute(ctx *core.Context) {
+    // ctx.Event.Payload is now accessible!
+    if ctx.Event.Payload != nil {
+        fmt.Printf("\tPayload: %v\n", ctx.Event.Payload)  // ← Printed!
+    }
+}
+```
+
+### The Context: The Messenger Bag
+
+The **Context** (`ctx`) is what carries data to actions:
+```go
+type Context struct {
+    World *entity.World  // Access to all entities
+    Event Event          // The event (including Payload)
+}
+```
+
+Every action receives this Context, so it can:
+- Read event data: `ctx.Event.Payload["damage"]`
+- Access entities: `ctx.World.GetEntity(...)`
+- Modify the game state
+
+### Practical Examples
+
+**Player takes damage:**
+```go
+Event{
+    Type: "PLAYER_HIT",
+    A: "player",
+    B: "enemy_3",
+    Payload: map[string]any{
+        "damage": 25,
+        "damageType": "fire",
+    },
+}
+```
+
+**Spawn an enemy:**
+```go
+Event{
+    Type: "SPAWN_ENEMY",
+    Payload: map[string]any{
+        "x": 100,
+        "y": 200,
+        "enemyType": "goblin",
+        "level": 5,
+    },
+}
+```
+
+**Key pressed:**
+```go
+Event{
+    Type: "KEY_PRESSED",
+    Payload: map[string]any{
+        "key": "SPACE",
+        "timestamp": 1234567890,
+    },
+}
+```
+
+### Why Separate Type and Payload?
+
+- **Type**: Fast to check (string comparison) - used by Dispatcher to route events
+- **Payload**: Flexible data container - used by Actions to get details
+
+**Analogy**: Email
+- **Subject line** = Type ("Meeting Reminder", "Invoice")
+- **Email body** = Payload (the actual message content)
+
+You scan subject lines quickly, but only read the body when relevant!
+
+### The Takeaway
+
+The Payload is the **flexible data container** that travels with every event. It's defined once in `event.go` but used everywhere in your engine to pass information between systems without tight coupling.
