@@ -1,9 +1,13 @@
 package entity
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type Entity struct {
 	ID         string
+	Tags       []string
 	Components map[string]any
 }
 
@@ -31,6 +35,7 @@ func (w *World) CreateEntity(prefix string) *Entity {
 	// Create entity
 	entity := &Entity{
 		ID:         id,
+		Tags:       make([]string, 0),
 		Components: make(map[string]any),
 	}
 
@@ -38,4 +43,56 @@ func (w *World) CreateEntity(prefix string) *Entity {
 	w.Entities[id] = entity
 
 	return entity
+}
+
+// AddTag adds a tag to the entity (normalized to lowercase alphanumeric)
+func (e *Entity) AddTag(tag string) {
+	// Normalize to lowercase
+	tag = strings.ToLower(tag)
+
+	// Manually filter valid characters (faster than regex)
+	tag = filterTag(tag)
+
+	// Skip empty tags
+	if tag == "" {
+		return
+	}
+
+	if !e.HasTag(tag) {
+		e.Tags = append(e.Tags, tag)
+	}
+}
+
+// filterTag keeps only a-z, 0-9, and underscore
+func filterTag(s string) string {
+	result := make([]byte, 0, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' {
+			result = append(result, c)
+		}
+	}
+	return string(result)
+}
+
+// HasTag checks if the entity has a specific tag
+func (e *Entity) HasTag(tag string) bool {
+	for _, t := range e.Tags {
+		if t == tag {
+			return true
+		}
+	}
+	return false
+}
+
+// RemoveTag removes a tag from the entity
+func (e *Entity) RemoveTag(tag string) {
+	for i, t := range e.Tags {
+		if t == tag {
+			// Remove by swapping with last element and slicing
+			e.Tags[i] = e.Tags[len(e.Tags)-1]
+			e.Tags = e.Tags[:len(e.Tags)-1]
+			return
+		}
+	}
 }

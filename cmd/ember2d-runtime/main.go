@@ -67,6 +67,27 @@ func main() {
 	}
 	log.Println("=== Step 1 Test Complete ===")
 
+	// TEST STEP 2: Tag System
+	log.Println("\n=== Testing Step 2: Tag System ===")
+	// Test normalization
+	player.AddTag("Player")       // Should become "player"
+	player.AddTag("CONTROLLABLE") // Should become "controllable"
+	player.AddTag("player")       // Duplicate - should be ignored
+	// Test filtering
+	enemy1.AddTag("Enemy-Type") // Should become "enemytype"
+	enemy1.AddTag("Hostile!!!") // Should become "hostile"
+	enemy1.AddTag("AI_Enabled") // Should become "ai_enabled"
+	// Test HasTag
+	log.Printf("Player has 'player' tag: %v", player.HasTag("player"))
+	log.Printf("Player has 'controllable' tag: %v", player.HasTag("controllable"))
+	log.Printf("Player has 'enemy' tag: %v", player.HasTag("enemy"))
+	// Display all tags
+	log.Printf("Player tags: %v", player.Tags)
+	log.Printf("Enemy1 tags: %v", enemy1.Tags)
+	// Test RemoveTag
+	enemy1.RemoveTag("hostile")
+	log.Printf("Enemy1 tags after removing 'hostile': %v", enemy1.Tags)
+	log.Println("=== Step 2 Test Complete ===\n")
 	// 2. Define a Test Behavior
 	// Rule: When "START_GAME" event happens -> Log "Engine is running!"
 	testBehavior := &behavior.Behavior{
