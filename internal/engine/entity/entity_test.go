@@ -14,6 +14,10 @@ func TestCreateEntity(t *testing.T) {
 	if player.ID != "player_0" {
 		t.Errorf("Expected 'player_0', got '%s'", player.ID)
 	}
+	//Check that prefix is auto-added as tag
+	if !player.HasTag("player") {
+		t.Error("CreateEntity should auto-add prefix as tag")
+	}
 }
 
 func TestCreateMultipleEntities(t *testing.T) {
@@ -131,21 +135,21 @@ func TestNoDuplicateTags(t *testing.T) {
 	entity.AddTag("player")
 	entity.AddTag("player")
 	entity.AddTag("PLAYER")
-
-	if len(entity.Tags) != 1 {
+	// expecting 2: "test" (auto) + "player"
+	if len(entity.Tags) != 2 {
 		t.Errorf("Expected 1 tag, got %d (duplicates not prevented)", len(entity.Tags))
 	}
 }
 
 func TestEmptyTagIgnored(t *testing.T) {
 	world := NewWorld()
-	entity := world.CreateEntity("test")
+	entity := world.CreateEntity("test") // Has "test" tag
 
 	entity.AddTag("")
 	entity.AddTag("!!!") // Becomes empty after filtering
-
-	if len(entity.Tags) != 0 {
-		t.Errorf("Expected 0 tags, got %d", len(entity.Tags))
+	// Now expecting 1: just "test"
+	if len(entity.Tags) != 1 {
+		t.Errorf("Expected 1 tag, got %d", len(entity.Tags))
 	}
 }
 
@@ -241,12 +245,13 @@ func TestAddTagNormalization(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
 	// Add with different cases - should all become the same tag
+	entity.AddTag("tEst")
 	entity.AddTag("player")
 	entity.AddTag("Player")
 	entity.AddTag("PLAYER")
 	entity.AddTag("PlAyEr")
-	if len(entity.Tags) != 1 {
-		t.Errorf("Expected 1 tag (all normalized to same), got %d", len(entity.Tags))
+	if len(entity.Tags) != 2 {
+		t.Errorf("Expected 2 tags (test + player), got %d", len(entity.Tags))
 	}
 }
 
@@ -261,8 +266,8 @@ func TestRemoveTagThatDoesNotExist(t *testing.T) {
 	// Try to remove a tag that doesn't exist
 	entity.RemoveTag("enemy")
 	// Original tags should still be there
-	if len(entity.Tags) != 2 {
-		t.Errorf("Expected 2 tags, got %d", len(entity.Tags))
+	if len(entity.Tags) != 3 {
+		t.Errorf("Expected 3 tags, got %d", len(entity.Tags))
 	}
 	if !entity.HasTag("player") {
 		t.Error("'player' tag should still exist")
@@ -270,11 +275,16 @@ func TestRemoveTagThatDoesNotExist(t *testing.T) {
 	if !entity.HasTag("friendly") {
 		t.Error("'friendly' tag should still exist")
 	}
+	if !entity.HasTag("test") {
+		t.Error("'test' tag should still exist")
+	}
 }
 func TestRemoveTagFromEmptyTags(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
+	entity.RemoveTag("test")
 	// Entity has no tags - this should not panic
+	entity.RemoveTag("test")
 	entity.RemoveTag("anything")
 	if len(entity.Tags) != 0 {
 		t.Errorf("Expected 0 tags, got %d", len(entity.Tags))

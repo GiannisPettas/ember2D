@@ -38,6 +38,9 @@ func (w *World) CreateEntity(prefix string) *Entity {
 		Components: make(map[string]any),
 	}
 
+	// Auto-add prefix as tag for easy querying
+	entity.AddTag(prefix)
+
 	// Add to world
 	w.Entities[id] = entity
 
