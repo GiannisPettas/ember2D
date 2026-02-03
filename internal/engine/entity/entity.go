@@ -2,7 +2,6 @@ package entity
 
 import (
 	"fmt"
-	"strings"
 )
 
 type Entity struct {
@@ -47,9 +46,6 @@ func (w *World) CreateEntity(prefix string) *Entity {
 
 // AddTag adds a tag to the entity (normalized to lowercase alphanumeric)
 func (e *Entity) AddTag(tag string) {
-	// Normalize to lowercase
-	tag = strings.ToLower(tag)
-
 	// Manually filter valid characters (faster than regex)
 	tag = filterTag(tag)
 
@@ -63,20 +59,16 @@ func (e *Entity) AddTag(tag string) {
 	}
 }
 
-// filterTag keeps only a-z, 0-9, and underscore
-func filterTag(s string) string {
-	result := make([]byte, 0, len(s))
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' {
-			result = append(result, c)
-		}
-	}
-	return string(result)
-}
-
 // HasTag checks if the entity has a specific tag
 func (e *Entity) HasTag(tag string) bool {
+	// Early exit if no tags
+	if len(e.Tags) == 0 {
+		return false
+	}
+
+	// Normalize input
+	tag = filterTag(tag)
+
 	for _, t := range e.Tags {
 		if t == tag {
 			return true
@@ -87,6 +79,14 @@ func (e *Entity) HasTag(tag string) bool {
 
 // RemoveTag removes a tag from the entity
 func (e *Entity) RemoveTag(tag string) {
+	// Early exit if no tags
+	if len(e.Tags) == 0 {
+		return
+	}
+
+	// Normalize input
+	tag = filterTag(tag)
+
 	for i, t := range e.Tags {
 		if t == tag {
 			// Remove by swapping with last element and slicing
@@ -95,4 +95,23 @@ func (e *Entity) RemoveTag(tag string) {
 			return
 		}
 	}
+}
+
+// filterTag normalizes and filters: lowercase, keeps only a-z, 0-9, underscore
+func filterTag(s string) string {
+	result := make([]byte, 0, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+
+		// Convert uppercase to lowercase
+		if c >= 'A' && c <= 'Z' {
+			c = c + 32 // 'A'(65) + 32 = 'a'(97)
+		}
+
+		// Keep only valid characters
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' {
+			result = append(result, c)
+		}
+	}
+	return string(result)
 }

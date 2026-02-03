@@ -34,60 +34,6 @@ func main() {
 	// 1. Initialize World
 	world := entity.NewWorld()
 
-	// TEST STEP 1: Create entities with auto-generated IDs
-	log.Println("\n=== Testing Step 1: Entity Creation ===")
-
-	// Create a player
-	player := world.CreateEntity("player")
-	log.Printf("Created: %s", player.ID)
-
-	// Create multiple enemies
-	enemy1 := world.CreateEntity("enemy")
-	enemy2 := world.CreateEntity("enemy")
-	enemy3 := world.CreateEntity("enemy")
-	log.Printf("Created: %s", enemy1.ID)
-	log.Printf("Created: %s", enemy2.ID)
-	log.Printf("Created: %s", enemy3.ID)
-
-	// Create some bullets
-	bullet1 := world.CreateEntity("bullet")
-	bullet2 := world.CreateEntity("bullet")
-	log.Printf("Created: %s", bullet1.ID)
-	log.Printf("Created: %s", bullet2.ID)
-
-	// Verify entities are in the world
-	log.Printf("Total entities in world: %d", len(world.Entities))
-
-	// Test retrieval
-	retrieved := world.GetEntity("player_0")
-	if retrieved != nil {
-		log.Printf("Successfully retrieved entity: %s", retrieved.ID)
-	} else {
-		log.Println("ERROR: Could not retrieve player_0")
-	}
-	log.Println("=== Step 1 Test Complete ===")
-
-	// TEST STEP 2: Tag System
-	log.Println("\n=== Testing Step 2: Tag System ===")
-	// Test normalization
-	player.AddTag("Player")       // Should become "player"
-	player.AddTag("CONTROLLABLE") // Should become "controllable"
-	player.AddTag("player")       // Duplicate - should be ignored
-	// Test filtering
-	enemy1.AddTag("Enemy-Type") // Should become "enemytype"
-	enemy1.AddTag("Hostile!!!") // Should become "hostile"
-	enemy1.AddTag("AI_Enabled") // Should become "ai_enabled"
-	// Test HasTag
-	log.Printf("Player has 'player' tag: %v", player.HasTag("player"))
-	log.Printf("Player has 'controllable' tag: %v", player.HasTag("controllable"))
-	log.Printf("Player has 'enemy' tag: %v", player.HasTag("enemy"))
-	// Display all tags
-	log.Printf("Player tags: %v", player.Tags)
-	log.Printf("Enemy1 tags: %v", enemy1.Tags)
-	// Test RemoveTag
-	enemy1.RemoveTag("hostile")
-	log.Printf("Enemy1 tags after removing 'hostile': %v", enemy1.Tags)
-	log.Println("=== Step 2 Test Complete ===\n")
 	// 2. Define a Test Behavior
 	// Rule: When "START_GAME" event happens -> Log "Engine is running!"
 	testBehavior := &behavior.Behavior{
