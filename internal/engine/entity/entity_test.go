@@ -15,7 +15,7 @@ func TestCreateEntity(t *testing.T) {
 		t.Errorf("Expected 'player_0', got '%s'", player.ID)
 	}
 	//Check that prefix is auto-added as tag
-	if !player.HasTag("player") {
+	if !world.HasTag(player, "player") {
 		t.Error("CreateEntity should auto-add prefix as tag")
 	}
 }
@@ -83,9 +83,9 @@ func TestAddTag(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
 
-	entity.AddTag("enemy")
+	world.AddTag(entity, "enemy")
 
-	if !entity.HasTag("enemy") {
+	if !world.HasTag(entity, "enemy") {
 		t.Error("Entity should have 'enemy' tag")
 	}
 }
@@ -94,17 +94,17 @@ func TestTagNormalization(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
 
-	entity.AddTag("Player")
-	entity.AddTag("ENEMY")
-	entity.AddTag("Boss_Fight")
+	world.AddTag(entity, "Player")
+	world.AddTag(entity, "ENEMY")
+	world.AddTag(entity, "Boss_Fight")
 
-	if !entity.HasTag("player") {
+	if !world.HasTag(entity, "player") {
 		t.Error("'Player' should normalize to 'player'")
 	}
-	if !entity.HasTag("enemy") {
+	if !world.HasTag(entity, "enemy") {
 		t.Error("'ENEMY' should normalize to 'enemy'")
 	}
-	if !entity.HasTag("boss_fight") {
+	if !world.HasTag(entity, "boss_fight") {
 		t.Error("'Boss_Fight' should normalize to 'boss_fight'")
 	}
 }
@@ -113,17 +113,17 @@ func TestTagFiltering(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
 
-	entity.AddTag("Enemy-Type") // Hyphen should be removed
-	entity.AddTag("Hostile!!!") // Exclamations should be removed
-	entity.AddTag("AI_Enabled") // Underscore should be kept
+	world.AddTag(entity, "Enemy-Type") // Hyphen should be removed
+	world.AddTag(entity, "Hostile!!!") // Exclamations should be removed
+	world.AddTag(entity, "AI_Enabled") // Underscore should be kept
 
-	if !entity.HasTag("enemytype") {
+	if !world.HasTag(entity, "enemytype") {
 		t.Error("'Enemy-Type' should become 'enemytype'")
 	}
-	if !entity.HasTag("hostile") {
+	if !world.HasTag(entity, "hostile") {
 		t.Error("'Hostile!!!' should become 'hostile'")
 	}
-	if !entity.HasTag("ai_enabled") {
+	if !world.HasTag(entity, "ai_enabled") {
 		t.Error("'AI_Enabled' should become 'ai_enabled'")
 	}
 }
@@ -132,12 +132,12 @@ func TestNoDuplicateTags(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
 
-	entity.AddTag("player")
-	entity.AddTag("player")
-	entity.AddTag("PLAYER")
+	world.AddTag(entity, "player")
+	world.AddTag(entity, "player")
+	world.AddTag(entity, "PLAYER")
 	// expecting 2: "test" (auto) + "player"
-	if len(entity.Tags) != 2 {
-		t.Errorf("Expected 1 tag, got %d (duplicates not prevented)", len(entity.Tags))
+	if len(entity.tags) != 2 {
+		t.Errorf("Expected 1 tag, got %d (duplicates not prevented)", len(entity.tags))
 	}
 }
 
@@ -145,11 +145,11 @@ func TestEmptyTagIgnored(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test") // Has "test" tag
 
-	entity.AddTag("")
-	entity.AddTag("!!!") // Becomes empty after filtering
+	world.AddTag(entity, "")
+	world.AddTag(entity, "!!!") // Becomes empty after filtering
 	// Now expecting 1: just "test"
-	if len(entity.Tags) != 1 {
-		t.Errorf("Expected 1 tag, got %d", len(entity.Tags))
+	if len(entity.tags) != 1 {
+		t.Errorf("Expected 1 tag, got %d", len(entity.tags))
 	}
 }
 
@@ -157,14 +157,14 @@ func TestRemoveTag(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
 
-	entity.AddTag("enemy")
-	entity.AddTag("hostile")
-	entity.RemoveTag("hostile")
+	world.AddTag(entity, "enemy")
+	world.AddTag(entity, "hostile")
+	world.RemoveTag(entity, "hostile")
 
-	if entity.HasTag("hostile") {
+	if world.HasTag(entity, "hostile") {
 		t.Error("Tag 'hostile' should have been removed")
 	}
-	if !entity.HasTag("enemy") {
+	if !world.HasTag(entity, "enemy") {
 		t.Error("Tag 'enemy' should still exist")
 	}
 }
@@ -173,9 +173,9 @@ func TestHasTagFalse(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
 
-	entity.AddTag("player")
+	world.AddTag(entity, "player")
 
-	if entity.HasTag("enemy") {
+	if world.HasTag(entity, "enemy") {
 		t.Error("Entity should not have 'enemy' tag")
 	}
 }
@@ -186,58 +186,58 @@ func TestHasTagFalse(t *testing.T) {
 func TestHasTagNormalization(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
-	entity.AddTag("player") // Stored as "player"
+	world.AddTag(entity, "player") // Stored as "player"
 	// All these should find the tag
-	if !entity.HasTag("player") {
+	if !world.HasTag(entity, "player") {
 		t.Error("HasTag should find 'player'")
 	}
-	if !entity.HasTag("Player") {
+	if !world.HasTag(entity, "Player") {
 		t.Error("HasTag should normalize 'Player' to 'player'")
 	}
-	if !entity.HasTag("PLAYER") {
+	if !world.HasTag(entity, "PLAYER") {
 		t.Error("HasTag should normalize 'PLAYER' to 'player'")
 	}
-	if !entity.HasTag("PlAyEr") {
+	if !world.HasTag(entity, "PlAyEr") {
 		t.Error("HasTag should normalize 'PlAyEr' to 'player'")
 	}
 }
 func TestHasTagFilteringInput(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
-	entity.AddTag("enemytype")  // Stored as "enemytype"
-	entity.AddTag("enemy_type") // Stored as "enemy_type"
+	world.AddTag(entity, "enemytype")  // Stored as "enemytype"
+	world.AddTag(entity, "enemy_type") // Stored as "enemy_type"
 	// HasTag should filter input the same way
-	if !entity.HasTag("Enemy-Type") {
+	if !world.HasTag(entity, "Enemy-Type") {
 		t.Error("HasTag should filter 'Enemy-Type' to 'enemytype'")
 	}
-	if !entity.HasTag("enemy-type!!!") {
+	if !world.HasTag(entity, "enemy-type!!!") {
 		t.Error("HasTag should filter 'enemy-type!!!' to 'enemytype'")
 	}
-	if !entity.HasTag("enemy_type!?&") {
+	if !world.HasTag(entity, "enemy_type!?&") {
 		t.Error("HasTag should filter 'enemy_type!?&' to 'enemy_type'")
 	}
 }
 func TestRemoveTagNormalization(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
-	entity.AddTag("enemy")   // Stored as "enemy"
-	entity.AddTag("hostile") // Stored as "hostile"
+	world.AddTag(entity, "enemy")   // Stored as "enemy"
+	world.AddTag(entity, "hostile") // Stored as "hostile"
 	// Remove using different cases
-	entity.RemoveTag("ENEMY")
-	if entity.HasTag("enemy") {
+	world.RemoveTag(entity, "ENEMY")
+	if world.HasTag(entity, "enemy") {
 		t.Error("RemoveTag should remove 'enemy' when called with 'ENEMY'")
 	}
-	if !entity.HasTag("hostile") {
+	if !world.HasTag(entity, "hostile") {
 		t.Error("'hostile' should still exist")
 	}
 }
 func TestRemoveTagFilteringInput(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
-	entity.AddTag("bosstype") // Stored as "bosstype"
+	world.AddTag(entity, "bosstype") // Stored as "bosstype"
 	// Remove using unfiltered input
-	entity.RemoveTag("Boss-Type!!!")
-	if entity.HasTag("bosstype") {
+	world.RemoveTag(entity, "Boss-Type!!!")
+	if world.HasTag(entity, "bosstype") {
 		t.Error("RemoveTag should filter input and remove 'bosstype'")
 	}
 }
@@ -245,13 +245,13 @@ func TestAddTagNormalization(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
 	// Add with different cases - should all become the same tag
-	entity.AddTag("tEst")
-	entity.AddTag("player")
-	entity.AddTag("Player")
-	entity.AddTag("PLAYER")
-	entity.AddTag("PlAyEr")
-	if len(entity.Tags) != 2 {
-		t.Errorf("Expected 2 tags (test + player), got %d", len(entity.Tags))
+	world.AddTag(entity, "tEst")
+	world.AddTag(entity, "player")
+	world.AddTag(entity, "Player")
+	world.AddTag(entity, "PLAYER")
+	world.AddTag(entity, "PlAyEr")
+	if len(entity.tags) != 2 {
+		t.Errorf("Expected 2 tags (test + player), got %d", len(entity.tags))
 	}
 }
 
@@ -261,40 +261,82 @@ func TestAddTagNormalization(t *testing.T) {
 func TestRemoveTagThatDoesNotExist(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
-	entity.AddTag("player")
-	entity.AddTag("friendly")
+	world.AddTag(entity, "player")
+	world.AddTag(entity, "friendly")
 	// Try to remove a tag that doesn't exist
-	entity.RemoveTag("enemy")
+	world.RemoveTag(entity, "enemy")
 	// Original tags should still be there
-	if len(entity.Tags) != 3 {
-		t.Errorf("Expected 3 tags, got %d", len(entity.Tags))
+	if len(entity.tags) != 3 {
+		t.Errorf("Expected 3 tags, got %d", len(entity.tags))
 	}
-	if !entity.HasTag("player") {
+	if !world.HasTag(entity, "player") {
 		t.Error("'player' tag should still exist")
 	}
-	if !entity.HasTag("friendly") {
+	if !world.HasTag(entity, "friendly") {
 		t.Error("'friendly' tag should still exist")
 	}
-	if !entity.HasTag("test") {
+	if !world.HasTag(entity, "test") {
 		t.Error("'test' tag should still exist")
 	}
 }
 func TestRemoveTagFromEmptyTags(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
-	entity.RemoveTag("test")
+	world.RemoveTag(entity, "test")
 	// Entity has no tags - this should not panic
-	entity.RemoveTag("test")
-	entity.RemoveTag("anything")
-	if len(entity.Tags) != 0 {
-		t.Errorf("Expected 0 tags, got %d", len(entity.Tags))
+	world.RemoveTag(entity, "test")
+	world.RemoveTag(entity, "anything")
+	if len(entity.tags) != 0 {
+		t.Errorf("Expected 0 tags, got %d", len(entity.tags))
 	}
 }
 func TestHasTagOnEmptyTags(t *testing.T) {
 	world := NewWorld()
 	entity := world.CreateEntity("test")
 	// Entity has no tags
-	if entity.HasTag("anything") {
+	if world.HasTag(entity, "anything") {
 		t.Error("HasTag should return false for empty tags")
+	}
+}
+
+// ============================================
+// Step 3 Tests: Querying
+// ============================================
+func TestGetEntitiesByTag(t *testing.T) {
+	world := NewWorld()
+	// Create different entity types
+	world.CreateEntity("player")
+	world.CreateEntity("enemy")
+	world.CreateEntity("enemy")
+	world.CreateEntity("enemy")
+	world.CreateEntity("bullet")
+	// Query enemies
+	enemies := world.GetEntitiesByTag("enemy")
+	if len(enemies) != 3 {
+		t.Errorf("Expected 3 enemies, got %d", len(enemies))
+	}
+	// Query player
+	players := world.GetEntitiesByTag("player")
+	if len(players) != 1 {
+		t.Errorf("Expected 1 player, got %d", len(players))
+	}
+}
+func TestGetEntitiesByTagEmpty(t *testing.T) {
+	world := NewWorld()
+	world.CreateEntity("player")
+	// Query non-existent tag
+	ghosts := world.GetEntitiesByTag("ghost")
+	if ghosts != nil && len(ghosts) != 0 {
+		t.Errorf("Expected 0 ghosts, got %d", len(ghosts))
+	}
+}
+func TestGetEntitiesByTagNormalization(t *testing.T) {
+	world := NewWorld()
+	world.CreateEntity("enemy")
+	world.CreateEntity("enemy")
+	// Query with different cases
+	enemies := world.GetEntitiesByTag("ENEMY")
+	if len(enemies) != 2 {
+		t.Errorf("Expected 2 enemies with 'ENEMY' query, got %d", len(enemies))
 	}
 }

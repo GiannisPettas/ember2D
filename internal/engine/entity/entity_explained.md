@@ -11,15 +11,18 @@ This document explains the Entity Manager and what we've implemented in ember2D.
 ```go
 type Entity struct {
     ID         string             // Unique identifier (e.g., "enemy_0")
-    Tags       []string           // Categories (e.g., ["enemy", "hostile"])
+    tags       []string           // Private - managed by World
     Components map[string]any     // Game data (position, health, etc.)
 }
 
 type World struct {
-    Entities  map[string]*Entity  // All entities
-    idCounter int                 // For generating unique IDs
+    Entities  map[string]*Entity                // All entities
+    tagIndex  map[string]map[string]*Entity     // tag -> entityID -> *Entity
+    idCounter int                               // For generating unique IDs
 }
 ```
+
+**Key design:** Tags are private (`tags` lowercase). Only World can modify them, ensuring the index stays consistent.
 
 ---
 
@@ -31,85 +34,64 @@ type World struct {
 enemy := world.CreateEntity("enemy")
 // Creates entity with:
 // - ID: "enemy_0" (auto-generated, unique)
-// - Tags: ["enemy"] (auto-added from prefix)
-// - Components: empty map (ready for data)
+// - tags: ["enemy"] (auto-added from prefix)
+// - Indexed automatically for O(1) queries
 ```
 
-**Key behaviors:**
-- `idCounter` ensures unique IDs across all entities
-- Prefix is auto-added as tag for easy querying
-- IDs are human-readable for debugging
+### 2. Tag Index for O(1) Queries
 
-### 2. Tag System
-
-Tags categorize entities for querying and game logic.
+We maintain a reverse lookup index:
 
 ```go
-entity.AddTag("hostile")     // Add a tag
-entity.AddTag("FLYING")      // Normalized to "flying"
-entity.HasTag("hostile")     // Check for tag → true
-entity.RemoveTag("hostile")  // Remove tag
+tagIndex = {
+    "enemy":  {"enemy_0": *Entity, "enemy_1": *Entity},
+    "player": {"player_0": *Entity},
+    "bullet": {"bullet_0": *Entity, "bullet_1": *Entity, ...},
+}
 ```
 
-**Tag Normalization:**
-- All tags are converted to lowercase
-- Only `a-z`, `0-9`, and `_` are allowed
-- Invalid characters are removed
-- Examples: `"Enemy"` → `"enemy"`, `"Boss-Type"` → `"bosstype"`
+**Why nested maps?**
+- Outer map: O(1) lookup by tag
+- Inner map: O(1) add/remove entity from tag
 
-**Optimizations:**
-- Single-pass `filterTag()` handles lowercase + filtering
-- Early exit when entity has no tags
+### 3. World-Level Tag Methods
+
+All tag operations go through World to keep the index in sync:
+
+```go
+world.AddTag(entity, "hostile")     // Add tag + update index
+world.RemoveTag(entity, "hostile")  // Remove tag + update index
+world.HasTag(entity, "hostile")     // Check for tag
+world.GetTags(entity)               // Get all tags (copy)
+world.GetEntitiesByTag("enemy")     // Find all enemies - O(1) lookup!
+```
 
 ---
 
-## Design Decisions
+## Performance Analysis
 
-### Why Auto-Add Prefix as Tag?
+### Query Performance
 
-When you create `world.CreateEntity("enemy")`, the engine automatically adds `"enemy"` as a tag.
+| Operation | Old (no index) | New (with index) |
+|-----------|----------------|------------------|
+| Find all enemies | Loop 10,000 entities | Direct map lookup |
+| Complexity | O(N) | O(1) + O(k) |
 
-**Benefits:**
-- Entities are always queryable by their type
-- Less boilerplate for game developers
-- Hard to forget to tag entities
+Where N = total entities, k = entities matching the tag.
 
-**Example:**
+### The GC Trade-off
+
+`GetEntitiesByTag` currently allocates a new slice each call:
+
 ```go
-// Without auto-tag (old way)
-enemy := world.CreateEntity("enemy")
-enemy.AddTag("enemy")  // Easy to forget!
-
-// With auto-tag (current)
-enemy := world.CreateEntity("enemy")
-// Already has "enemy" tag!
+result := make([]*Entity, 0, len(entityMap))
 ```
 
-### Why Normalize Tags?
+**Problem:** If called frequently (10×/frame × 60 FPS = 600 allocations/sec), GC works hard.
 
-Without normalization:
-```go
-entity.AddTag("Enemy")
-entity.AddTag("enemy")  // Oops, different tag!
-entity.HasTag("ENEMY")  // Returns false!
-```
-
-With normalization:
-```go
-entity.AddTag("Enemy")   // Stored as "enemy"
-entity.AddTag("enemy")   // Duplicate, ignored
-entity.HasTag("ENEMY")   // Returns true!
-```
-
-### ID vs Tags
-
-| Concept | Purpose | Example |
-|---------|---------|---------|
-| **ID** | Unique identifier | `"player_0"`, `"enemy_42"` |
-| **Tags** | Categories | `["enemy", "hostile", "boss"]` |
-
-- **IDs** answer: "Which specific entity is this?"
-- **Tags** answer: "What kind of entity is this?"
+**Solution (Step 5):** We'll add:
+- Callback pattern for zero allocations
+- Slice pooling for reusing memory
 
 ---
 
@@ -118,18 +100,58 @@ entity.HasTag("ENEMY")   // Returns true!
 ### World Methods
 
 ```go
-world := entity.NewWorld()                  // Create new world
-entity := world.CreateEntity("prefix")      // Create entity with auto-ID and auto-tag
-entity := world.GetEntity("entity_0")       // Get by exact ID
+world := entity.NewWorld()                     // Create new world
+entity := world.CreateEntity("prefix")         // Create with auto-ID and auto-tag
+
+world.AddTag(entity, "tag")                    // Add tag to entity
+world.RemoveTag(entity, "tag")                 // Remove tag from entity
+world.HasTag(entity, "tag")                    // Check if entity has tag
+world.GetTags(entity)                          // Get all tags (copy)
+
+world.GetEntity("entity_0")                    // Get by exact ID
+world.GetEntitiesByTag("enemy")                // Get all with tag - O(1)!
 ```
 
-### Entity Methods
+### Tag Normalization
 
+All tags are normalized automatically:
+- Converted to lowercase
+- Only `a-z`, `0-9`, `_` allowed
+- Examples: `"Enemy"` → `"enemy"`, `"Boss-Type"` → `"bosstype"`
+
+---
+
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────┐
+│                  World                          │
+│  ┌─────────────┐    ┌──────────────────────┐   │
+│  │  Entities   │    │      tagIndex        │   │
+│  │ map[id]*E   │    │ map[tag]map[id]*E    │   │
+│  └─────────────┘    └──────────────────────┘   │
+│         │                    │                  │
+│         └────── sync'd ──────┘                  │
+│                                                 │
+│  AddTag() / RemoveTag() update BOTH maps       │
+└─────────────────────────────────────────────────┘
+```
+
+---
+
+## Why World Controls Tags (Not Entity)
+
+If Entity could modify its own tags:
 ```go
-entity.AddTag("tag")       // Add tag (normalized)
-entity.HasTag("tag")       // Check for tag → bool
-entity.RemoveTag("tag")    // Remove tag
+entity.AddTag("boss")                // Tags updated
+// BUT tagIndex NOT updated!
+world.GetEntitiesByTag("boss")       // Returns nothing! BUG!
 ```
+
+By making `tags` private and routing through World:
+- Index always stays in sync
+- No way to accidentally break consistency
+- Single source of truth
 
 ---
 
@@ -137,6 +159,7 @@ entity.RemoveTag("tag")    // Remove tag
 
 Still to implement:
 
-1. **Querying** - `GetEntitiesByTag("enemy")` to find groups
+1. ~~**Querying** - `GetEntitiesByTag("enemy")`~~ ✅ Done!
 2. **Safe Deletion** - `DestroyEntity()` with deferred cleanup
-3. **Pooling** - Reuse entity memory for performance
+3. **Pooling** - Reuse entity memory, reduce GC pressure
+4. **Zero-Allocation Queries** - Callback pattern for hot paths

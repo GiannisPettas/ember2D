@@ -6,24 +6,85 @@ import (
 
 type Entity struct {
 	ID         string
-	Tags       []string
+	tags       []string
 	Components map[string]any
 }
 
 type World struct {
 	Entities  map[string]*Entity
-	idCounter int //counter for generating IDs
+	tagIndex  map[string]map[string]*Entity // tag -> entityID -> *Entity
+	idCounter int                           //counter for generating IDs
 }
 
 func NewWorld() *World {
 	return &World{
 		Entities:  make(map[string]*Entity),
+		tagIndex:  make(map[string]map[string]*Entity),
 		idCounter: 0, //start from 0
 	}
 }
 
 func (w *World) GetEntity(id string) *Entity {
 	return w.Entities[id]
+}
+
+// AddTag adds a tag to an entity and updates the index
+func (w *World) AddTag(entity *Entity, tag string) {
+	tag = filterTag(tag)
+	if tag == "" {
+		return
+	}
+	// Only add if entity doesn't already have this tag
+	if entity.hasTagInternal(tag) {
+		return
+	}
+	// Add to entity's internal tags
+	entity.addTagInternal(tag)
+	// Update index
+	if w.tagIndex[tag] == nil {
+		w.tagIndex[tag] = make(map[string]*Entity)
+	}
+	w.tagIndex[tag][entity.ID] = entity
+}
+
+// RemoveTag removes a tag from an entity and updates the index
+func (w *World) RemoveTag(entity *Entity, tag string) {
+	tag = filterTag(tag)
+	if tag == "" {
+		return
+	}
+	entity.removeTagInternal(tag)
+	// Update index
+	if w.tagIndex[tag] != nil {
+		delete(w.tagIndex[tag], entity.ID)
+	}
+}
+
+// HasTag checks if an entity has a specific tag
+func (w *World) HasTag(entity *Entity, tag string) bool {
+	tag = filterTag(tag)
+	return entity.hasTagInternal(tag)
+}
+
+// GetTags returns a copy of the entity's tags
+func (w *World) GetTags(entity *Entity) []string {
+	result := make([]string, len(entity.tags))
+	copy(result, entity.tags)
+	return result
+}
+
+// GetEntitiesByTag returns all entities with the specified tag (O(1) lookup)
+func (w *World) GetEntitiesByTag(tag string) []*Entity {
+	tag = filterTag(tag)
+	entityMap := w.tagIndex[tag]
+	if entityMap == nil {
+		return nil
+	}
+	result := make([]*Entity, 0, len(entityMap))
+	for _, entity := range entityMap {
+		result = append(result, entity)
+	}
+	return result
 }
 
 // Factory method for creating entities with auto-generated IDs
@@ -34,45 +95,31 @@ func (w *World) CreateEntity(prefix string) *Entity {
 	// Create entity
 	entity := &Entity{
 		ID:         id,
-		Tags:       make([]string, 0),
+		tags:       make([]string, 0),
 		Components: make(map[string]any),
 	}
 
-	// Auto-add prefix as tag for easy querying
-	entity.AddTag(prefix)
-
 	// Add to world
 	w.Entities[id] = entity
+	// Auto-add prefix as tag for easy querying
+	w.AddTag(entity, prefix) // Use World method
 
 	return entity
 }
 
 // AddTag adds a tag to the entity (normalized to lowercase alphanumeric)
-func (e *Entity) AddTag(tag string) {
-	// Manually filter valid characters (faster than regex)
-	tag = filterTag(tag)
-
-	// Skip empty tags
-	if tag == "" {
-		return
-	}
-
-	if !e.HasTag(tag) {
-		e.Tags = append(e.Tags, tag)
-	}
+func (e *Entity) addTagInternal(tag string) {
+	e.tags = append(e.tags, tag)
 }
 
 // HasTag checks if the entity has a specific tag
-func (e *Entity) HasTag(tag string) bool {
+func (e *Entity) hasTagInternal(tag string) bool {
 	// Early exit if no tags
-	if len(e.Tags) == 0 {
+	if len(e.tags) == 0 {
 		return false
 	}
 
-	// Normalize input
-	tag = filterTag(tag)
-
-	for _, t := range e.Tags {
+	for _, t := range e.tags {
 		if t == tag {
 			return true
 		}
@@ -81,20 +128,17 @@ func (e *Entity) HasTag(tag string) bool {
 }
 
 // RemoveTag removes a tag from the entity
-func (e *Entity) RemoveTag(tag string) {
+func (e *Entity) removeTagInternal(tag string) {
 	// Early exit if no tags
-	if len(e.Tags) == 0 {
+	if len(e.tags) == 0 {
 		return
 	}
 
-	// Normalize input
-	tag = filterTag(tag)
-
-	for i, t := range e.Tags {
+	for i, t := range e.tags {
 		if t == tag {
 			// Remove by swapping with last element and slicing
-			e.Tags[i] = e.Tags[len(e.Tags)-1]
-			e.Tags = e.Tags[:len(e.Tags)-1]
+			e.tags[i] = e.tags[len(e.tags)-1]
+			e.tags = e.tags[:len(e.tags)-1]
 			return
 		}
 	}
