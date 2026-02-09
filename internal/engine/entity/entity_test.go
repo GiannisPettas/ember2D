@@ -326,7 +326,7 @@ func TestGetEntitiesByTagEmpty(t *testing.T) {
 	world.CreateEntity("player")
 	// Query non-existent tag
 	ghosts := world.GetEntitiesByTag("ghost")
-	if ghosts != nil && len(ghosts) != 0 {
+	if len(ghosts) != 0 {
 		t.Errorf("Expected 0 ghosts, got %d", len(ghosts))
 	}
 }
@@ -338,5 +338,102 @@ func TestGetEntitiesByTagNormalization(t *testing.T) {
 	enemies := world.GetEntitiesByTag("ENEMY")
 	if len(enemies) != 2 {
 		t.Errorf("Expected 2 enemies with 'ENEMY' query, got %d", len(enemies))
+	}
+}
+
+// ============================================
+// Step 4 Tests: Safe Deletion
+// ============================================
+
+func TestDestroyEntity(t *testing.T) {
+	world := NewWorld()
+
+	enemy := world.CreateEntity("enemy")
+
+	if !world.IsAlive(enemy) {
+		t.Error("New entity should be alive")
+	}
+
+	world.DestroyEntity(enemy.ID)
+
+	if world.IsAlive(enemy) {
+		t.Error("Entity should be marked as not alive after DestroyEntity")
+	}
+
+	// Entity still exists until Cleanup
+	if world.GetEntity(enemy.ID) == nil {
+		t.Error("Entity should still exist before Cleanup")
+	}
+}
+
+func TestCleanup(t *testing.T) {
+	world := NewWorld()
+
+	enemy := world.CreateEntity("enemy")
+	world.DestroyEntity(enemy.ID)
+	world.Cleanup()
+
+	// Now entity should be gone
+	if world.GetEntity(enemy.ID) != nil {
+		t.Error("Entity should be removed after Cleanup")
+	}
+
+	if len(world.Entities) != 0 {
+		t.Errorf("Expected 0 entities, got %d", len(world.Entities))
+	}
+}
+
+func TestCleanupRemovesFromTagIndex(t *testing.T) {
+	world := NewWorld()
+
+	world.CreateEntity("enemy")
+	enemy2 := world.CreateEntity("enemy")
+	world.CreateEntity("enemy")
+
+	world.DestroyEntity(enemy2.ID)
+	world.Cleanup()
+
+	enemies := world.GetEntitiesByTag("enemy")
+	if len(enemies) != 2 {
+		t.Errorf("Expected 2 enemies after cleanup, got %d", len(enemies))
+	}
+}
+
+func TestDoubleDestroy(t *testing.T) {
+	world := NewWorld()
+
+	enemy := world.CreateEntity("enemy")
+
+	// Destroy twice - should not panic or add duplicate
+	world.DestroyEntity(enemy.ID)
+	world.DestroyEntity(enemy.ID)
+
+	if len(world.entitiesToDelete) != 1 {
+		t.Errorf("Expected 1 in delete list, got %d", len(world.entitiesToDelete))
+	}
+
+	world.Cleanup()
+
+	if len(world.Entities) != 0 {
+		t.Errorf("Expected 0 entities, got %d", len(world.Entities))
+	}
+}
+
+func TestDestroyNonExistent(t *testing.T) {
+	world := NewWorld()
+
+	// Should not panic
+	world.DestroyEntity("nonexistent_99")
+
+	if len(world.entitiesToDelete) != 0 {
+		t.Errorf("Expected 0 in delete list, got %d", len(world.entitiesToDelete))
+	}
+}
+
+func TestIsAliveNil(t *testing.T) {
+	world := NewWorld()
+
+	if world.IsAlive(nil) {
+		t.Error("IsAlive(nil) should return false")
 	}
 }

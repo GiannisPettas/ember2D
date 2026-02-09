@@ -4,23 +4,28 @@ import (
 	"fmt"
 )
 
+// Entity represents an object in the world.
 type Entity struct {
 	ID         string
 	tags       []string
 	Components map[string]any
+	isAlive    bool
 }
 
+// World manages entities and their lifecycle.
 type World struct {
-	Entities  map[string]*Entity
-	tagIndex  map[string]map[string]*Entity // tag -> entityID -> *Entity
-	idCounter int                           //counter for generating IDs
+	Entities         map[string]*Entity
+	tagIndex         map[string]map[string]*Entity // tag -> entityID -> *Entity
+	idCounter        int                           //counter for generating IDs
+	entitiesToDelete []string
 }
 
 func NewWorld() *World {
 	return &World{
-		Entities:  make(map[string]*Entity),
-		tagIndex:  make(map[string]map[string]*Entity),
-		idCounter: 0, //start from 0
+		Entities:         make(map[string]*Entity),
+		tagIndex:         make(map[string]map[string]*Entity),
+		idCounter:        0, //start from 0
+		entitiesToDelete: make([]string, 0),
 	}
 }
 
@@ -87,6 +92,38 @@ func (w *World) GetEntitiesByTag(tag string) []*Entity {
 	return result
 }
 
+// DestroyEntity marks an entity for deletion
+func (w *World) DestroyEntity(id string) {
+	entity := w.Entities[id]
+	if entity == nil || !entity.isAlive {
+		return
+	}
+	entity.isAlive = false
+	w.entitiesToDelete = append(w.entitiesToDelete, id)
+}
+
+// IsAlive checks if entity is not marked for deletion
+func (w *World) IsAlive(entity *Entity) bool {
+	return entity != nil && entity.isAlive
+}
+
+// Cleanup removes marked entities (call at end of frame)
+func (w *World) Cleanup() {
+	for _, id := range w.entitiesToDelete {
+		entity := w.Entities[id]
+		if entity == nil {
+			continue
+		}
+		for _, tag := range entity.tags {
+			if w.tagIndex[tag] != nil {
+				delete(w.tagIndex[tag], entity.ID)
+			}
+		}
+		delete(w.Entities, id)
+	}
+	w.entitiesToDelete = w.entitiesToDelete[:0]
+}
+
 // Factory method for creating entities with auto-generated IDs
 func (w *World) CreateEntity(prefix string) *Entity {
 	id := fmt.Sprintf("%s_%d", prefix, w.idCounter)
@@ -97,6 +134,7 @@ func (w *World) CreateEntity(prefix string) *Entity {
 		ID:         id,
 		tags:       make([]string, 0),
 		Components: make(map[string]any),
+		isAlive:    true,
 	}
 
 	// Add to world
