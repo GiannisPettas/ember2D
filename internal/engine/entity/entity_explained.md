@@ -1,165 +1,229 @@
-# Entity Manager Explained
+# Entity System Explained
 
-This document explains the Entity Manager and what we've implemented in ember2D.
-
----
-
-## What We've Built
-
-### Entity Structure
-
-```go
-type Entity struct {
-    ID         string             // Unique identifier (e.g., "enemy_0")
-    tags       []string           // Private - managed by World
-    Components map[string]any     // Game data (position, health, etc.)
-}
-
-type World struct {
-    Entities  map[string]*Entity                // All entities
-    tagIndex  map[string]map[string]*Entity     // tag -> entityID -> *Entity
-    idCounter int                               // For generating unique IDs
-}
-```
-
-**Key design:** Tags are private (`tags` lowercase). Only World can modify them, ensuring the index stays consistent.
+This document explains the Entity System architecture in ember2D.
 
 ---
 
-## Features Implemented
+## Architecture Overview
 
-### 1. Safe Entity Creation
+ember2D uses an **Entity Component System (ECS)** with Go generics:
 
-```go
-enemy := world.CreateEntity("enemy")
-// Creates entity with:
-// - ID: "enemy_0" (auto-generated, unique)
-// - tags: ["enemy"] (auto-added from prefix)
-// - Indexed automatically for O(1) queries
 ```
+┌──────────────────────────────────────────────────────┐
+│                      World                           │
+│  ┌──────────────┐    ┌─────────────────────────┐    │
+│  │    alive      │    │      TagManager          │    │
+│  │ map[uint64]   │    │ entityTags + tagIndex    │    │
+│  │   bool        │    │ (dual map, O(1) lookup)  │    │
+│  └──────────────┘    └─────────────────────────┘    │
+│                                                      │
+│  CreateEntity() / DestroyEntity() / Cleanup()        │
+└──────────────────────────────────────────────────────┘
 
-### 2. Tag Index for O(1) Queries
-
-We maintain a reverse lookup index:
-
-```go
-tagIndex = {
-    "enemy":  {"enemy_0": *Entity, "enemy_1": *Entity},
-    "player": {"player_0": *Entity},
-    "bullet": {"bullet_0": *Entity, "bullet_1": *Entity, ...},
-}
-```
-
-**Why nested maps?**
-- Outer map: O(1) lookup by tag
-- Inner map: O(1) add/remove entity from tag
-
-### 3. World-Level Tag Methods
-
-All tag operations go through World to keep the index in sync:
-
-```go
-world.AddTag(entity, "hostile")     // Add tag + update index
-world.RemoveTag(entity, "hostile")  // Remove tag + update index
-world.HasTag(entity, "hostile")     // Check for tag
-world.GetTags(entity)               // Get all tags (copy)
-world.GetEntitiesByTag("enemy")     // Find all enemies - O(1) lookup!
+┌──────────────────────────────────────────────────────┐
+│           ComponentManager[T] (external)             │
+│  ┌──────────────────────────────────────────────┐   │
+│  │  positions := ComponentManager[Position]      │   │
+│  │  healths   := ComponentManager[Health]        │   │
+│  │  velocities := ComponentManager[Velocity]     │   │
+│  │  ...one manager per component type            │   │
+│  └──────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Performance Analysis
+## Entity
 
-### Query Performance
-
-| Operation | Old (no index) | New (with index) |
-|-----------|----------------|------------------|
-| Find all enemies | Loop 10,000 entities | Direct map lookup |
-| Complexity | O(N) | O(1) + O(k) |
-
-Where N = total entities, k = entities matching the tag.
-
-### The GC Trade-off
-
-`GetEntitiesByTag` currently allocates a new slice each call:
+An Entity is just a number (`uint64`). It has no data — it's an ID.
 
 ```go
-result := make([]*Entity, 0, len(entityMap))
+type Entity uint64
+
+// Entity 0, 1, 2, 3... auto-incremented
+player := world.CreateEntity("player")   // returns Entity(0)
+enemy  := world.CreateEntity("enemy")    // returns Entity(1)
 ```
 
-**Problem:** If called frequently (10×/frame × 60 FPS = 600 allocations/sec), GC works hard.
-
-**Solution (Step 5):** We'll add:
-- Callback pattern for zero allocations
-- Slice pooling for reusing memory
+**Why uint64 instead of a struct?**
+- Fast comparisons (single CPU instruction)
+- Fast map lookups (integer hash vs string hash)
+- Lightweight (8 bytes vs struct with pointers)
 
 ---
 
-## Current API
+## World
 
-### World Methods
+World manages entity lifecycle — creation, destruction, and cleanup.
 
 ```go
-world := entity.NewWorld()                     // Create new world
-entity := world.CreateEntity("prefix")         // Create with auto-ID and auto-tag
+world := entity.NewWorld()
 
-world.AddTag(entity, "tag")                    // Add tag to entity
-world.RemoveTag(entity, "tag")                 // Remove tag from entity
-world.HasTag(entity, "tag")                    // Check if entity has tag
-world.GetTags(entity)                          // Get all tags (copy)
+// Create entities (with optional tags)
+player := world.CreateEntity("player")
+enemy  := world.CreateEntity("enemy", "hostile", "ai")
+bullet := world.CreateEntity("bullet")
 
-world.GetEntity("entity_0")                    // Get by exact ID
-world.GetEntitiesByTag("enemy")                // Get all with tag - O(1)!
+// Check if alive
+world.IsAlive(player)   // true
+
+// Mark for deletion (deferred — removed at end of frame)
+world.DestroyEntity(enemy)
+world.IsAlive(enemy)    // false (marked, not yet removed)
+
+// Actually remove at end of frame
+world.Cleanup()         // Now enemy is fully gone
+
+// Count alive entities
+world.EntityCount()     // 2 (player + bullet)
 ```
+
+### Deferred Deletion
+
+`DestroyEntity` does NOT remove immediately. It marks the entity, then `Cleanup()` removes it at end of frame. This prevents bugs from modifying collections during iteration.
+
+```
+Frame:  [Systems run] → [DestroyEntity marks] → [Cleanup removes]
+```
+
+---
+
+## TagManager
+
+Tags classify entities. Accessed via `world.Tags()`.
+
+```go
+// Add/Remove/Check tags
+world.Tags().AddTag(player, "controllable")
+world.Tags().HasTag(player, "controllable")  // true
+world.Tags().RemoveTag(player, "controllable")
+
+// Get all tags for an entity
+world.Tags().GetTags(player)  // ["player"]
+
+// Find all entities with a tag — O(1) lookup!
+enemies := world.Tags().GetEntitiesByTag("enemy")
+```
+
+### Dual Index (O(1) both directions)
+
+```
+entityTags:  entity → set of tags       (What tags does entity 5 have?)
+tagIndex:    tag    → set of entities    (Which entities are "enemy"?)
+```
+
+Both maps update together — always in sync.
 
 ### Tag Normalization
 
-All tags are normalized automatically:
-- Converted to lowercase
-- Only `a-z`, `0-9`, `_` allowed
-- Examples: `"Enemy"` → `"enemy"`, `"Boss-Type"` → `"bosstype"`
+All tags are automatically normalized:
+- Uppercase → lowercase: `"Player"` → `"player"`
+- Special chars removed: `"Boss-Type"` → `"bosstype"`
+- Underscore kept: `"ai_enabled"` → `"ai_enabled"`
+- Empty/invalid ignored: `""`, `"!!!"` → skipped
 
 ---
 
-## Architecture Diagram
+## ComponentManager[T]
 
-```
-┌─────────────────────────────────────────────────┐
-│                  World                          │
-│  ┌─────────────┐    ┌──────────────────────┐   │
-│  │  Entities   │    │      tagIndex        │   │
-│  │ map[id]*E   │    │ map[tag]map[id]*E    │   │
-│  └─────────────┘    └──────────────────────┘   │
-│         │                    │                  │
-│         └────── sync'd ──────┘                  │
-│                                                 │
-│  AddTag() / RemoveTag() update BOTH maps       │
-└─────────────────────────────────────────────────┘
-```
+Generic, type-safe component storage. Lives in `internal/engine/components/`.
 
----
-
-## Why World Controls Tags (Not Entity)
-
-If Entity could modify its own tags:
 ```go
-entity.AddTag("boss")                // Tags updated
-// BUT tagIndex NOT updated!
-world.GetEntitiesByTag("boss")       // Returns nothing! BUG!
+// Define your component types (plain structs)
+type Position struct { X, Y float64 }
+type Health   struct { Current, Max int }
+type Velocity struct { X, Y float64 }
+
+// Create a manager for each type
+positions  := components.NewComponentManager[Position]()
+healths    := components.NewComponentManager[Health]()
+velocities := components.NewComponentManager[Velocity]()
+
+// Attach components to entities
+positions.Add(player, Position{X: 100, Y: 50})
+healths.Add(player, Health{Current: 100, Max: 100})
+
+// Read components — returns *T (pointer), nil if missing
+pos := positions.Get(player)   // *Position
+pos.X += 10                    // Modify directly via pointer
+
+// Check/Remove
+positions.Has(player)     // true
+positions.Remove(player)  // detach component
+
+// Iterate all entities with this component
+velocities.Each(func(e entity.Entity, vel *Velocity) {
+    if pos := positions.Get(e); pos != nil {
+        pos.X += vel.X
+        pos.Y += vel.Y
+    }
+})
 ```
 
-By making `tags` private and routing through World:
-- Index always stays in sync
-- No way to accidentally break consistency
-- Single source of truth
+### Why generics instead of map[string]any?
+
+| | Old (`map[string]any`) | New (`ComponentManager[T]`) |
+|---|---|---|
+| Type safety | Runtime (crashes) | Compile-time (errors caught early) |
+| Access | `entity.Components["pos"].(*Position)` | `positions.Get(entity)` |
+| Performance | String hash + unboxing | uint64 hash, direct pointer |
+| Boilerplate | Type assertion every time | Zero — compiler knows the type |
 
 ---
 
-## What's Next
+## Complete Example: Game Loop
 
-Still to implement:
+```go
+// Setup
+world := entity.NewWorld()
 
-1. ~~**Querying** - `GetEntitiesByTag("enemy")`~~ ✅ Done!
-2. **Safe Deletion** - `DestroyEntity()` with deferred cleanup
-3. **Pooling** - Reuse entity memory, reduce GC pressure
-4. **Zero-Allocation Queries** - Callback pattern for hot paths
+positions  := components.NewComponentManager[Position]()
+velocities := components.NewComponentManager[Velocity]()
+healths    := components.NewComponentManager[Health]()
+
+// Create entities
+player := world.CreateEntity("player")
+positions.Add(player, Position{X: 400, Y: 300})
+healths.Add(player, Health{Current: 100, Max: 100})
+
+for i := 0; i < 10; i++ {
+    enemy := world.CreateEntity("enemy")
+    positions.Add(enemy, Position{X: float64(i * 80), Y: 0})
+    velocities.Add(enemy, Velocity{X: 0, Y: 2})
+}
+
+// Game loop (each frame)
+// 1. Movement system
+velocities.Each(func(e entity.Entity, vel *Velocity) {
+    if pos := positions.Get(e); pos != nil {
+        pos.X += vel.X
+        pos.Y += vel.Y
+    }
+})
+
+// 2. Cleanup dead enemies
+for _, e := range world.Tags().GetEntitiesByTag("enemy") {
+    if pos := positions.Get(e); pos != nil && pos.Y > 600 {
+        world.DestroyEntity(e)
+    }
+}
+
+// 3. End of frame cleanup
+world.Cleanup()
+```
+
+---
+
+## File Structure
+
+```
+internal/engine/
+├── components/
+│   └── manager.go       # ComponentManager[T] — generic storage
+├── entity/
+│   ├── entity.go        # Entity (uint64), World lifecycle
+│   ├── tags.go          # TagManager with dual index
+│   └── entity_test.go   # 21 tests, all passing
+└── core/
+    └── context.go       # Context for behavior system
+```

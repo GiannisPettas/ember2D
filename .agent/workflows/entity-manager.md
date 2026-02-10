@@ -4,80 +4,73 @@ description: Entity Manager Implementation - Step-by-step ECS enhancement
 
 # Entity Manager Implementation Workflow
 
-**Status:** In Progress  
-**Last Updated:** 2026-02-09
+**Status:** Generic ECS Refactor Complete  
+**Last Updated:** 2026-02-10
+
+## Architecture
+
+Entity system uses **Go generics** for type-safe component storage:
+- `Entity` = `uint64` (not a struct)
+- `ComponentManager[T]` for type-safe components (no more `map[string]any`)
+- `TagManager` with O(1) reverse index lookup
+- Deferred deletion via `DestroyEntity` + `Cleanup`
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `internal/engine/entity/entity.go` | Entity type (uint64), World lifecycle |
+| `internal/engine/entity/tags.go` | TagManager with dual index |
+| `internal/engine/components/manager.go` | Generic ComponentManager[T] |
+| `internal/engine/entity/entity_test.go` | 21 tests, all passing |
+| `internal/engine/core/context.go` | Context for behaviors |
 
 ## Implementation Checklist
 
 ### Step 1: Safe Entity Creation ✅
-- [x] Add `idCounter` to World
-- [x] Implement `CreateEntity(prefix string)` factory method
-- [x] Auto-generate IDs in format `{prefix}_{counter}`
-- [x] Auto-add prefix as tag for easy querying
-- [x] Tests written and passing
+- [x] Entity = uint64
+- [x] `CreateEntity(tags ...string)` with auto-tagging
+- [x] Tests passing
 
 ### Step 2: Tags ✅
-- [x] Add `tags []string` field to Entity
-- [x] Implement tag methods: `AddTag`, `HasTag`, `RemoveTag`, `GetTags`
-- [x] Add tag normalization (lowercase, filter special chars)
-- [x] Prevent duplicate tags
-- [x] Add `tagIndex` to World for O(1) queries
-- [x] Tests written and passing
+- [x] TagManager with `map[Entity]map[string]bool`
+- [x] Reverse index `map[string]map[Entity]bool` for O(1) queries
+- [x] Tag normalization (lowercase, filter special chars)
+- [x] No duplicate tags
+- [x] Tests passing
 
 ### Step 3: Querying ✅
-- [x] Implement `GetEntitiesByTag(tag string)` with index lookup
-- [x] Return empty slice for non-existent tags
-- [x] Normalize tag input in queries
-- [x] Tests written and passing
+- [x] `GetEntitiesByTag` with O(1) index lookup
+- [x] Normalization in queries
+- [x] Tests passing
 
 ### Step 4: Safe Deletion ✅
-- [x] Add `isAlive` field to Entity
-- [x] Add `entitiesToDelete` slice to World
-- [x] Implement `DestroyEntity(id string)` - marks for deletion
-- [x] Implement `IsAlive(entity *Entity)` - check alive status
-- [x] Implement `Cleanup()` - removes marked entities
-- [x] Cleanup removes from tag index too
-- [x] Handle double-destroy and non-existent entity gracefully
-- [x] Tests written and passing
+- [x] `DestroyEntity` marks for deletion
+- [x] `Cleanup` removes at end of frame + cleans tag index
+- [x] Double-destroy and non-existent handled
+- [x] Tests passing
 
-### Step 5: Entity Pooling ⏳
-- [ ] Add `entityPool []*Entity` to World
-- [ ] Add `poolIndex int` to World
-- [ ] Pre-allocate pool in `NewWorld()`
-- [ ] Modify `CreateEntity` to reuse from pool
-- [ ] Implement `resetEntity()` to clear entity for reuse
-- [ ] Modify `Cleanup()` to reset pool index
-- [ ] Tests for pooling behavior
+### Step 5: ComponentManager[T] ✅
+- [x] Generic type-safe storage
+- [x] `Add`, `Get`, `Remove`, `Has`, `Each`, `Count`
+- [x] Compiles and integrates with entity package
 
-### Step 6 (Bonus): Builder Pattern
-- [ ] Create `EntityOption` functional options type
-- [ ] Implement `WithTag(tag string) EntityOption`
-- [ ] Implement `WithComponent(name string, value any) EntityOption`
-- [ ] Update `CreateEntity` to accept options variadic
-- [ ] Tests for builder pattern
-
----
-
-## Reference Files
-
-- **Implementation:** `internal/engine/entity/entity.go`
-- **Tests:** `internal/engine/entity/entity_test.go`
-- **Plan Document:** `internal/engine/entity/entity_manager_plan.md`
-
----
+### Next Steps ⏳
+- [ ] Add ComponentManager tests
+- [ ] Builder pattern (optional)
+- [ ] Entity pooling (optional, profile first)
+- [ ] Update `entity_explained.md` docs
 
 ## How to Run Tests
 
 ```powershell
 // turbo
-cd c:\Users\petta\ember2D
 go test ./internal/engine/entity/... -v
 ```
 
----
+## How to Build
 
-## Notes
-
-- Keep this file updated as we make progress
-- Check off items as they're completed
-- Add any issues or decisions in the notes section
+```powershell
+// turbo
+go build ./...
+```
