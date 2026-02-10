@@ -7,7 +7,6 @@ import (
 )
 
 // Test component types
-type Position struct{ X, Y float64 }
 type Health struct{ Current, Max int }
 
 // ============================================
