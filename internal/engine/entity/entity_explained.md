@@ -219,11 +219,12 @@ world.Cleanup()
 ```
 internal/engine/
 ├── components/
-│   └── manager.go       # ComponentManager[T] — generic storage
+│   ├── manager.go       # ComponentManager[T] — generic storage
+│   └── manager_test.go  # ComponentManager tests
 ├── entity/
 │   ├── entity.go        # Entity (uint64), World lifecycle
 │   ├── tags.go          # TagManager with dual index
-│   └── entity_test.go   # 21 tests, all passing
+│   └── entity_test.go   # World + TagManager tests
 └── core/
     └── context.go       # Context for behavior system
 ```

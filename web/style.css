@@ -9,6 +9,37 @@ h1 {
     margin: 20px;
 }
 
+#ws-status,
+#ping-btn,
+#log {
+    margin-left: 20px;
+}
+
+#ping-btn {
+    margin-top: 8px;
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    border: 1px solid #666;
+    background: #2a2a2a;
+    color: #e0e0e0;
+    cursor: pointer;
+}
+
+#ping-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#log {
+    width: 90vw;
+    height: 180px;
+    overflow: auto;
+    background: #151515;
+    border: 1px solid #444;
+    padding: 8px;
+    box-sizing: border-box;
+}
+
 #canvas {
     width: 90vw;
     height: 70vh;

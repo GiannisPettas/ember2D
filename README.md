@@ -28,7 +28,7 @@ go run ./cmd/ember2d-runtime
 ---
 
 ## ▶ Running the Editor (Visual Logic Editor)
-This launches a web server at `http://localhost:8080` that serves the visual logic editor.
+This launches a web server at `http://localhost:9000` that serves the visual logic editor.
 
 ```bash
 go run ./cmd/ember2d-editor
@@ -36,7 +36,7 @@ go run ./cmd/ember2d-editor
 
 Once running, open your browser and navigate to:
 ```
-http://localhost:8080
+http://localhost:9000
 ```
 
 ## Project Structure

@@ -16,5 +16,5 @@
     - [x] ComponentManager[T] generic (components/manager.go)
     - [x] Update context.go for new entity type
     - [x] All 21 tests passing, project builds
-- [ ] Next: ComponentManager tests <!-- id: 104 -->
-- [ ] Next: Update entity_explained.md <!-- id: 105 -->
+- [x] Next: ComponentManager tests <!-- id: 104 -->
+- [x] Next: Update entity_explained.md <!-- id: 105 -->
